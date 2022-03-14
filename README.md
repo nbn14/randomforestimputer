@@ -20,11 +20,11 @@ from rfimputer import RandomForestImputer
 from sklearn import tree
 
 # Initial data cleaning and organisation
-df_original = pd.read_csv("healthcare-dataset-stroke-data.csv")
-df_original = df_original.drop(labels = ["id"],axis=1)
-df_original.drop(df_original.loc[df_original["gender"]=="Other"].index,inplace=True,axis=0)
-df_original.reset_index(drop=True,inplace=True)
-df1 = df_original.copy()
+df = pd.read_csv("healthcare-dataset-stroke-data.csv")
+df = df.drop(labels=["id"],axis=1)
+df.drop(df.loc[df["gender"]=="Other"].index,inplace=True,axis=0)
+df.reset_index(drop=True,inplace=True)
+df1 = df.copy()
 
 # Initialise imputer
 rffc = RandomForestImputer(base_estimator=tree.DecisionTreeClassifier(),class_weight="balanced",max_depth=None,n_estimators=2,
