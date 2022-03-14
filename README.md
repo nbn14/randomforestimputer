@@ -32,7 +32,7 @@ rffc = RandomForestImputer(base_estimator=tree.DecisionTreeClassifier(),class_we
                         
 # Fit_transform imputer -> return imputed array (known and imputed unknown values)
 rffc.fit_transform(df=df1,target_name="stroke",miss_col_name="bmi", miss_val=np.nan,simple_fill="median", 
-            method="knn", n_neighbors=5, miss_array=None, ordinal_list=["gender"])
+            method="knn", n_neighbors=5, miss_array=None)
 
 # To change other parameters of the base estimator
 rffc.get_params(deep=True)
