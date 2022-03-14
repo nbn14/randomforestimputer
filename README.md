@@ -10,7 +10,7 @@ Simple imputation methods such as mean or mode fill in tends to provide biased r
     * Refer to sklearn documentation for an in-depth explanation of base estimators' parameters
     * For this version, only one column (i.e. 1 feature) with missing values can be imputed at one time, assuming the rest of the features contain known data 
     
-2. Python code example to run the imputer
+2. Python code example to run the imputer:
 ```python
 import sys
 import importlib
