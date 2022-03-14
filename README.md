@@ -5,7 +5,7 @@ Imputation of missing data based on random forest's clustering property. This te
 Simple imputation methods such as mean or mode fill in tends to provide biased results for large amount of missing data. RandomForestImputer can deal with various types and large volume of missing data. The process of building a random forest is repeated several times (usually <10) until convergence is reached. 
 
 1. Note:    
-    * Algorithm followed steps proposed in [link] https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#missing1
+    * Algorithm followed steps proposed in https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#missing1
     * A practical definition of convergence has been derived - not part of the original algorithm
     * Refer to sklearn documentation for an in-depth explanation of base estimators' parameters
     * For this version, only one column (i.e. 1 feature) with missing values can be imputed at one time, assuming the rest of the features contain known data 
