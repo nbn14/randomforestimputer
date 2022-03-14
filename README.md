@@ -8,7 +8,7 @@ Simple imputation methods such as mean or mode fill in tends to provide biased r
     * Algorithm followed steps proposed in https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#missing1
     * A practical definition of convergence has been derived - not part of the original algorithm
     * Refer to sklearn documentation for an in-depth explanation of base estimators' parameters
-    * For this version, only one column (i.e. 1 feature) with missing values can be imputed at one time, assuming the rest of the features contain known data 
+    * For this version, only one column (i.e. 1 feature) with missing values can be imputed at one time, assuming the rest of the features contain only known data 
     
 2. Python code example to run the imputer:
 ```python
