@@ -12,9 +12,6 @@ Simple imputation methods such as mean or mode fill in tends to provide biased r
     
 2. Python code example to run the imputer:
 ```python
-import sys
-import importlib
-sys.path.append('/Users/nbngu/Documents/Python learning/Machine learning material/all_projects/customised_functions')
 
 import pandas as pd
 import numpy as np
