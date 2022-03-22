@@ -41,5 +41,4 @@ rffc.set_params(**param)
 rffc.get_params(deep=True)
 
 ```
-     
-     
+Data used for this analysis can be found at https://www.kaggle.com/fedesoriano/stroke-prediction-dataset
