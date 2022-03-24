@@ -421,7 +421,7 @@ class RandomForestImputer(BaseEstimator):
             pred_val = weighted_freq_mat.sum()
             check_na = (pred_val==0.0).sum()
             
-            updated_miss_col[self.index_missing_] = np.squeeze(pred_val.values)
+            updated_miss_col[self.index_missing_] = pred_val.values
             updated_miss_col[updated_miss_col==0.0] = np.median(updated_miss_col)
             
             pred_dis = "min-max fill range: {:.2f}-{:.2f}".format(np.min(pred_val[pred_val>0]),np.max(pred_val))
@@ -432,7 +432,7 @@ class RandomForestImputer(BaseEstimator):
             # Check the distribution of predicted values
             pred_dis = pred_val.value_counts()
             # Update the prediction of missing variable
-            updated_miss_col[self.index_missing_] = np.squeeze(pred_val.values)
+            updated_miss_col[self.index_missing_] = pred_val.values
             # sum will have na values if the unknown datapoint was not selected in any of the resampled trees 
             check_na = pred_val.isna().sum()
             updated_miss_col[updated_miss_col!=updated_miss_col] = pd.DataFrame(updated_miss_col).mode()[0] # fill na with mode
