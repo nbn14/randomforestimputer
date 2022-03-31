@@ -1,3 +1,5 @@
+from enum import Enum
+
 import pandas as pd
 import numpy as np
 from feature_transformation import *
@@ -6,13 +8,34 @@ import warnings
 
 from imblearn.under_sampling import TomekLinks, RandomUnderSampler
 from imblearn.over_sampling import SMOTE, RandomOverSampler
-from imblearn.pipeline import Pipeline as im_pipeline  
+from imblearn.pipeline import Pipeline 
 from sklearn.base import BaseEstimator,clone
 from sklearn.impute import SimpleImputer,KNNImputer
 from sklearn.preprocessing import OrdinalEncoder,OneHotEncoder,LabelEncoder
 
 from sklearn import tree
 from sklearn.tree import DecisionTreeClassifier
+
+
+class ResamplingMethod(Enum):
+    BOOTSTRAP = 1
+    RANDOM_OVER = 2
+    RANDOM_UNDER = 3
+
+
+class IterationResult:
+    """
+    mod_proximity_mat_: dict of float arrays of shape (n_iter,)
+        Contain the modified proximity matrix for each random forest run before normalisation
+    weighted_freq_mat_: dict of float arrays of shape (n_iter,)
+        Contain transformed proximity matrix after weighing and normalisation are done for each random forest run
+    updated_miss_col_: dict of float arrays of shape (n_iter,)
+        Contain updated guess values for the entire miss_col_ at every iteration
+    """
+    def __init__(self, mod_proximity, weighted_freq, updated_miss_col):
+        self.mod_proximity = mod_proximity
+        self.weighted_freq = weighted_freq
+        self.updated_miss_col = updated_miss_col
 
 
 class RandomForestImputer(BaseEstimator):
@@ -58,8 +81,6 @@ class RandomForestImputer(BaseEstimator):
         Original array with missing data to be filled
     target_name_: dtype
         Name of target column recorded in original input dataframe
-    y_: ndarray of shape (# of total data points,)
-        Target variable. Format compatile with base_estimator  
     df_miss_target_: pd DataFrame with 2 columns (feature with missing values and target variable)
     x_rest_: ndarray of shape(total # of data points,# of columns after encoded)
         Encoded/transformed array of other input features (excluding the feature with missing values to be filled)
@@ -67,12 +88,8 @@ class RandomForestImputer(BaseEstimator):
         List of indices of known data points in the original dataframe
     index_missing_: ndarray of shape(# of unknown data points,)
         List of indices of unknown data points in the original dataframe
-    mod_proximity_mat_: dict of float arrays of shape (n_iter,)
-        Contain the modified proximity matrix for each random forest run before normalisation
-    weighted_freq_mat_: dict of float arrays of shape (n_iter,)
-        Contain transformed proximity matrix after weighing and normalisation are done for each random forest run
-    updated_miss_col_: dict of float arrays of shape (n_iter,)
-        Contain updated guess values for the entire miss_col_ at every iteration
+    iterations_: List[IterationResult]
+        Results of each iteration
 
     Methods:
     -------
@@ -82,7 +99,7 @@ class RandomForestImputer(BaseEstimator):
     def __init__(self,base_estimator=tree.DecisionTreeClassifier(),n_iter=6,
                 n_estimators=2,max_depth=None, criterion='gini',
                 max_features=5,min_samples_split=2,min_samples_leaf=1,
-                classification=True,resampling ="random_over", miss_val_type="categorical_nominal",
+                classification=True, resampling = ResamplingMethod.RANDOM_OVER, miss_val_type="categorical_nominal",
                 class_weight = "balanced"):
 
         # Base estimator attributes
@@ -110,7 +127,7 @@ class RandomForestImputer(BaseEstimator):
         forest_est = []
         for i in range(self.n_estimators):
             # Pass on parameters to define each base estimator
-            estimator = clone(self.base_estimator)   
+            estimator = clone(self.base_estimator)
             estimator.max_depth = self.max_depth
             estimator.max_features = self.max_features
             estimator.min_samples_split = self.min_samples_split
@@ -121,17 +138,15 @@ class RandomForestImputer(BaseEstimator):
             
             # Create a pipeline for each estimator which includes resampling method of choice
             random_state = i*577 + random_state_rf*1013
-            if self.resampling =="random_over":
-                pipe = im_pipeline([("res",RandomOverSampler(random_state=random_state,sampling_strategy="auto")),
-                                    ("est",estimator)])
-            elif self.resampling == "random_under":
-                pipe = im_pipeline([("res",RandomUnderSampler(random_state=random_state,sampling_strategy="auto")),
-                                    ("est",estimator)])
-            elif self.resampling == "bootstrap":
-                pipe = im_pipeline([("res",RandomOverSampler(random_state=random_state,sampling_strategy="all")),
-                                    ("est",estimator)])
+            resampler = None
+            if self.resampling == ResamplingMethod.RANDOM_OVER:
+                resampler = RandomOverSampler(random_state=random_state,sampling_strategy="auto")
+            elif self.resampling == ResamplingMethod.RANDOM_UNDER:
+                resampler = RandomUnderSampler(random_state=random_state,sampling_strategy="auto")
+            elif self.resampling == ResamplingMethod.BOOTSTRAP:
+                resampler = RandomOverSampler(random_state=random_state,sampling_strategy="all")
               
-            forest_est.append((f"estimator_{i}", pipe))
+            forest_est.append(Pipeline([("res", resampler), ("est", estimator)]))
 
         return forest_est
     
@@ -156,12 +171,6 @@ class RandomForestImputer(BaseEstimator):
         self.miss_val_ = miss_val
         self.miss_col_name_ = miss_col_name
         self.miss_col_ = df[miss_col_name].values
-        
-        # Target: Encode target into appropriate format -> return a ndarray (y_row,)
-        if self.classification:
-            self.y_ = LabelEncoder().fit_transform(df[target_name]) # Not suitable for estimators requiring sparse matrix as input
-        else:
-            self.y_= df[target_name].values
         self.target_name_ = target_name
         
         self.df_miss_target_ = df[[target_name,miss_col_name]]
@@ -278,22 +287,8 @@ class RandomForestImputer(BaseEstimator):
 #            
         return imputed_missing_encoded
 
-
     
-    def process_input(self,simple_fill="most_frequent", method="simple", n_neighbors=1, miss_array=None):
-        """Return transformed array of input features (including the feature with missing values to be filled)"""
-        # Initialise missing column value
-        initial_imputed_col= self.initialise_miss_guess(simple_fill=simple_fill, 
-                                                        method=method, n_neighbors=n_neighbors, miss_array=miss_array)
-        
-        # Combine x_rest_ and imputed column for the next iteration of random forest:
-        x_all = np.append(self.x_rest_,initial_imputed_col,axis=1)
-        
-        return x_all, initial_imputed_col
-
-
-    
-    def fit_forest(self,X,random_state_rf=1):
+    def fit_forest(self, X, Y, random_state_rf=1):
             """Run the dataset through the clustering algorithm using a single random forest 
             and return an updated proximity matrix
 
@@ -318,10 +313,10 @@ class RandomForestImputer(BaseEstimator):
 
             # Fit individual decision tree in the forest
             for est in forest:
-                est[1].fit(X,self.y_)
-                x_res,y_res = est[1]["res"].fit_resample(X,self.y_)  # Refit to get x_resample
-                leave_id = est[1]["est"].apply(x_res)   # Get leave id for each sample
-                sample_index = est[1]["res"].sample_indices_
+                est.fit(X, Y)
+                x_res,y_res = est["res"].fit_resample(X, Y)  # Refit to get x_resample
+                leave_id = est["est"].apply(x_res)   # Get leave id for each sample
+                sample_index = est["res"].sample_indices_
 
                 # Get status of only samples appeared in this tree by filtering for only missing columns values at index of sample in tree
                 sample_status = []  
@@ -478,30 +473,35 @@ class RandomForestImputer(BaseEstimator):
         # Define the problem - Generate attributes
         self.define_problem(df=df,target_name=target_name,miss_col_name=miss_col_name,miss_val=miss_val,ordinal_list=ordinal_list)
         
-        # Initialise input for first forest run
-        x_all, initial_imputed_col = self.process_input(simple_fill=simple_fill, 
+        # Initialise missing column value
+        initial_imputed_col = self.initialise_miss_guess(simple_fill=simple_fill, 
                                                         method=method, n_neighbors=n_neighbors, miss_array=miss_array)
-        self.mod_proximity_mat_ = {}
-        self.weighted_freq_mat_ = {}
-        self.updated_miss_col_ = {}
+        
+        # Combine x_rest_ and imputed column for the next iteration of random forest:
+        x_all = np.append(self.x_rest_,initial_imputed_col,axis=1)
+        # Target: Encode target into appropriate format -> return a ndarray (y_row,)
+        if self.classification:
+            y_target = LabelEncoder().fit_transform(df[target_name]) # Not suitable for estimators requiring sparse matrix as input
+        else:
+            y_target = df[target_name].values
+        
+        self.iterations_ = []
         
         convergence = np.nan
         pred_val0 = [0]
         check_shape = x_all.shape
         update_shape = check_shape
-        prev_imputed = initial_imputed_col
+        updated_imputed_col = initial_imputed_col
         
         for j in range(self.n_iter):
             # Fit each forest
             assert check_shape == update_shape, "Shape of input array must stay consistent at every iteration"
-            mod_proximity_mat,weighted_freq_mat = self.fit_forest(x_all,random_state_rf=j)
+            mod_proximity_mat,weighted_freq_mat = self.fit_forest(x_all, y_target, random_state_rf=j)
             
             # Get predicted value for the missing column
             updated_miss_col, pred_val, pred_dis, check_na = self.transform_forest(weighted_freq_mat)
-            # Save results in dictionary
-            self.mod_proximity_mat_[f"iteration_{j}"] = mod_proximity_mat
-            self.weighted_freq_mat_[f"iteration_{j}"] = weighted_freq_mat
-            self.updated_miss_col_[f"iteration_{j}"] = updated_miss_col
+            # Save results in iterations_
+            self.iterations_.append(IterationResult(mod_proximity_mat, weighted_freq_mat, updated_miss_col))
 
             # Update convergence
             if j>0:
@@ -513,13 +513,12 @@ class RandomForestImputer(BaseEstimator):
             print("------------------------------------------------------------")
 
             # Restart a new iteration with updated guess for miss_col_
-            updated_imputed_col= self.initialise_miss_guess(method="manual", miss_array=updated_miss_col)
+            updated_imputed_col = self.initialise_miss_guess(method="manual", miss_array=updated_miss_col)
             x_all = np.append(self.x_rest_,updated_imputed_col,axis=1)
             
             # Update input variables with new predicted results from forest for convergence calculation
             pred_val0 = pred_val
             update_shape = x_all.shape
-            prev_imputed = updated_imputed_col 
             
         return updated_imputed_col
     
